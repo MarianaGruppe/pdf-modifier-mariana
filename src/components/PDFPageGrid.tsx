@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface PDFPageGridProps {
   pdfArrayBuffer: ArrayBuffer;
@@ -34,11 +34,11 @@ export const PDFPageGrid = ({
         canvas.width = viewport.width;
 
         if (context) {
-          await page.render({
-            canvasContext: context,
-            viewport: viewport,
-            canvas: canvas,
-          }).promise;
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+          canvas: canvas,
+        }).promise;
           thumbs.push(canvas.toDataURL());
         }
       }
