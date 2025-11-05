@@ -45,7 +45,18 @@ export const PDFMergerItem = ({
         const arrayBuffer = await file.arrayBuffer();
         console.log('[THUMBNAIL] ArrayBuffer loaded, size:', arrayBuffer.byteLength);
         
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        // TIMEOUT: Max 30 Sekunden warten auf PDF-Worker
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('PDF-Laden dauerte zu lange (Timeout nach 30s)')), 30000);
+        });
+        
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        console.log('[THUMBNAIL] Loading task created, waiting for PDF...');
+        
+        const pdf = await Promise.race([
+          loadingTask.promise,
+          timeoutPromise
+        ]) as any;
         console.log('[THUMBNAIL] PDF loaded, pages:', pdf.numPages);
         
         const page = await pdf.getPage(1);
