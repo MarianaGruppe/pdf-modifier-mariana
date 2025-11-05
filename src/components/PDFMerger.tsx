@@ -2,15 +2,30 @@ import { useState, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { PDFMergerItem } from "./PDFMergerItem";
+
+interface PDFFileData {
+  id: string;
+  file: File;
+  thumbnail: string | null;
+  pageCount: number;
+}
 
 export const PDFMerger = () => {
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [pdfFiles, setPdfFiles] = useState<PDFFileData[]>([]);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const handleFileSelect = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files || []);
-      const pdfFiles = files.filter((file) => file.type === "application/pdf");
-      setPdfFiles((prev) => [...prev, ...pdfFiles]);
+      const pdfFilesArray = files.filter((file) => file.type === "application/pdf");
+      const newPdfFiles = pdfFilesArray.map((file) => ({
+        id: `${Date.now()}-${Math.random()}`,
+        file,
+        thumbnail: null,
+        pageCount: 0,
+      }));
+      setPdfFiles((prev) => [...prev, ...newPdfFiles]);
     },
     []
   );
@@ -19,14 +34,46 @@ export const PDFMerger = () => {
     setPdfFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleThumbnailGenerated = useCallback(
+    (index: number, thumbnail: string, pageCount: number) => {
+      setPdfFiles((prev) =>
+        prev.map((item, i) =>
+          i === index ? { ...item, thumbnail, pageCount } : item
+        )
+      );
+    },
+    []
+  );
+
+  const handleDragStart = useCallback((index: number) => {
+    setDraggedIndex(index);
+  }, []);
+
+  const handleDragOver = useCallback((index: number) => {
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    setPdfFiles((prev) => {
+      const newFiles = [...prev];
+      const draggedItem = newFiles[draggedIndex];
+      newFiles.splice(draggedIndex, 1);
+      newFiles.splice(index, 0, draggedItem);
+      return newFiles;
+    });
+    setDraggedIndex(index);
+  }, [draggedIndex]);
+
+  const handleDrop = useCallback(() => {
+    setDraggedIndex(null);
+  }, []);
+
   const handleMerge = useCallback(async () => {
     if (pdfFiles.length < 2) return;
 
     try {
       const mergedPdf = await PDFDocument.create();
 
-      for (const file of pdfFiles) {
-        const arrayBuffer = await file.arrayBuffer();
+      for (const pdfData of pdfFiles) {
+        const arrayBuffer = await pdfData.file.arrayBuffer();
         const pdf = await PDFDocument.load(arrayBuffer);
         const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
         copiedPages.forEach((page) => mergedPdf.addPage(page));
@@ -79,26 +126,26 @@ export const PDFMerger = () => {
 
       {pdfFiles.length > 0 && (
         <>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground mb-2">
+          <div>
+            <div className="text-sm text-muted-foreground mb-3">
               {pdfFiles.length} Dokumente
             </div>
-            {pdfFiles.map((file, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-card border border-border text-sm"
-              >
-                <span className="truncate flex-1">{file.name}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeFile(index)}
-                  className="h-7 px-2 text-xs ml-2"
-                >
-                  Entfernen
-                </Button>
-              </div>
-            ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {pdfFiles.map((pdfData, index) => (
+                <PDFMergerItem
+                  key={pdfData.id}
+                  file={pdfData.file}
+                  index={index}
+                  pageCount={pdfData.pageCount}
+                  thumbnail={pdfData.thumbnail}
+                  onRemove={removeFile}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onThumbnailGenerated={handleThumbnailGenerated}
+                />
+              ))}
+            </div>
           </div>
 
           <Button
