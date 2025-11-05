@@ -54,13 +54,24 @@ export const PDFSplitter = () => {
 
   // Berechne Segmente basierend auf Split-Positionen und gelöschten Seiten
   const getSegments = useCallback((): number[][] => {
+    console.log('[GET-SEGMENTS] Called with:', {
+      pageCount,
+      splitPositions,
+      deletedPages: Array.from(deletedPages)
+    });
+
     const activePages = Array.from({ length: pageCount }, (_, i) => i).filter(
       (i) => !deletedPages.has(i)
     );
+    console.log('[GET-SEGMENTS] Active pages:', activePages);
 
-    if (activePages.length === 0) return [];
+    if (activePages.length === 0) {
+      console.log('[GET-SEGMENTS] No active pages, returning empty array');
+      return [];
+    }
 
     if (splitPositions.length === 0) {
+      console.log('[GET-SEGMENTS] No split positions, returning all active pages');
       return [activePages];
     }
 
@@ -71,6 +82,7 @@ export const PDFSplitter = () => {
       currentSegment.push(pageIndex);
       // Wenn diese Seite eine Split-Position ist, segment beenden
       if (splitPositions.includes(pageIndex)) {
+        console.log(`[GET-SEGMENTS] Split at page ${pageIndex}, segment:`, currentSegment);
         segments.push(currentSegment);
         currentSegment = [];
       }
@@ -78,9 +90,11 @@ export const PDFSplitter = () => {
 
     // Letztes Segment hinzufügen falls nicht leer
     if (currentSegment.length > 0) {
+      console.log('[GET-SEGMENTS] Final segment:', currentSegment);
       segments.push(currentSegment);
     }
 
+    console.log('[GET-SEGMENTS] Returning segments:', segments);
     return segments;
   }, [pageCount, splitPositions, deletedPages]);
 
@@ -88,7 +102,10 @@ export const PDFSplitter = () => {
     if (!pdfArrayBuffer) return;
 
     try {
+      console.log('[SPLIT-DOWNLOAD] Starting download process');
       const segments = getSegments();
+      console.log('[SPLIT-DOWNLOAD] Calculated segments:', segments);
+      console.log('[SPLIT-DOWNLOAD] Segments count:', segments.length);
 
       if (segments.length === 0) {
         toast.error("Keine Seiten zum Download vorhanden");
@@ -96,39 +113,66 @@ export const PDFSplitter = () => {
       }
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
+      console.log('[SPLIT-DOWNLOAD] Original filename:', originalFileName);
 
       for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
+        console.log(`[SPLIT-DOWNLOAD] Processing segment ${i + 1}:`, segment);
+        
+        console.log('[SPLIT-DOWNLOAD] Loading original PDF...');
         const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+        console.log('[SPLIT-DOWNLOAD] PDF loaded, total pages:', pdfDoc.getPageCount());
+        
+        console.log('[SPLIT-DOWNLOAD] Creating new PDF...');
         const newPdf = await PDFDocument.create();
+        
+        console.log('[SPLIT-DOWNLOAD] Copying pages:', segment);
         const copiedPages = await newPdf.copyPages(pdfDoc, segment);
+        console.log('[SPLIT-DOWNLOAD] Pages copied:', copiedPages.length);
+        
         copiedPages.forEach((page) => newPdf.addPage(page));
+        console.log('[SPLIT-DOWNLOAD] Pages added to new PDF');
 
+        console.log('[SPLIT-DOWNLOAD] Saving PDF...');
         const pdfBytes = await newPdf.save();
-        const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+        console.log('[SPLIT-DOWNLOAD] PDF saved, size:', pdfBytes.length, 'bytes');
+        
+        const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+        console.log('[SPLIT-DOWNLOAD] Blob created');
+        
         const url = URL.createObjectURL(blob);
-
         const link = document.createElement("a");
         link.href = url;
         link.download = `${originalFileName}_teil-${i + 1}.pdf`;
         link.click();
+        console.log(`[SPLIT-DOWNLOAD] Download triggered: ${link.download}`);
 
         URL.revokeObjectURL(url);
 
         // Kurze Verzögerung zwischen Downloads für Browser-Kompatibilität
         if (i < segments.length - 1) {
+          console.log('[SPLIT-DOWNLOAD] Waiting 300ms before next download...');
           await new Promise((resolve) => setTimeout(resolve, 300));
         }
       }
 
+      console.log('[SPLIT-DOWNLOAD] All downloads complete');
       toast.success(
         `${segments.length} PDF${segments.length > 1 ? "s" : ""} erfolgreich erstellt`
       );
     } catch (error) {
+      console.error('[SPLIT-DOWNLOAD ERROR]', error);
+      console.error('[SPLIT-DOWNLOAD ERROR DETAILS]', {
+        message: error instanceof Error ? error.message : 'Unknown',
+        stack: error instanceof Error ? error.stack : undefined,
+        segments: getSegments(),
+        pageCount,
+        deletedPages: Array.from(deletedPages),
+        splitPositions
+      });
       toast.error("Fehler beim Erstellen der PDFs");
-      console.error(error);
     }
-  }, [pdfArrayBuffer, pdfFile, getSegments]);
+  }, [pdfArrayBuffer, pdfFile, getSegments, pageCount, deletedPages, splitPositions]);
 
   const segments = getSegments();
   const activePages = pageCount - deletedPages.size;
