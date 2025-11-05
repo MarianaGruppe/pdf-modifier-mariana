@@ -28,13 +28,21 @@ export const PDFMergerItem = ({
   onDrop,
   onThumbnailGenerated,
 }: PDFMergerItemProps) => {
-  const [isGenerating, setIsGenerating] = useState(!thumbnail);
+  const [isGenerating, setIsGenerating] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (thumbnail) return;
+    if (thumbnail) {
+      setIsGenerating(false);
+      return;
+    }
 
     const generateThumbnail = async () => {
+      setIsGenerating(true);
+      setError(null);
+      
       try {
+        console.log('Generating thumbnail for:', file.name);
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const page = await pdf.getPage(1);
@@ -43,7 +51,9 @@ export const PDFMergerItem = ({
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
         
-        if (!context) return;
+        if (!context) {
+          throw new Error('Canvas context nicht verfügbar');
+        }
         
         canvas.height = viewport.height;
         canvas.width = viewport.width;
@@ -54,17 +64,19 @@ export const PDFMergerItem = ({
           canvas: canvas,
         }).promise;
 
-        const thumbnailUrl = canvas.toDataURL();
+        const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.8);
+        console.log('Thumbnail generated successfully for:', file.name);
         onThumbnailGenerated(index, thumbnailUrl, pdf.numPages);
       } catch (error) {
-        console.error("Error generating thumbnail:", error);
+        console.error('Thumbnail generation failed for:', file.name, error);
+        setError(error instanceof Error ? error.message : 'Unbekannter Fehler');
       } finally {
         setIsGenerating(false);
       }
     };
 
     generateThumbnail();
-  }, [file, index, onThumbnailGenerated, thumbnail]);
+  }, [file, index, onThumbnailGenerated]);
 
   return (
     <div
@@ -83,17 +95,18 @@ export const PDFMergerItem = ({
       <div className="space-y-2">
         {isGenerating ? (
           <Skeleton className="w-full aspect-[1/1.4]" />
+        ) : error ? (
+          <div className="w-full aspect-[1/1.4] bg-muted flex flex-col items-center justify-center p-4 text-center">
+            <div className="text-4xl mb-2">📄</div>
+            <p className="text-xs text-muted-foreground">Vorschau nicht verfügbar</p>
+          </div>
         ) : thumbnail ? (
           <img
             src={thumbnail}
             alt={file.name}
             className="w-full h-auto border border-border"
           />
-        ) : (
-          <div className="w-full aspect-[1/1.4] bg-muted flex items-center justify-center text-xs text-muted-foreground">
-            Vorschau nicht verfügbar
-          </div>
-        )}
+        ) : null}
         
         <div className="space-y-1">
           <p className="text-xs truncate" title={file.name}>
