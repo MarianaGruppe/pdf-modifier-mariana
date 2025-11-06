@@ -135,10 +135,10 @@ export const PDFSplitter = () => {
 
         console.log('[SPLIT-DOWNLOAD] Saving PDF...');
         const pdfBytes = await newPdf.save();
-        console.log('[SPLIT-DOWNLOAD] PDF saved, size:', pdfBytes.length, 'bytes');
-        
-        const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
-        console.log('[SPLIT-DOWNLOAD] Blob created');
+      console.log('[SPLIT-DOWNLOAD] PDF saved, size:', pdfBytes.length, 'bytes');
+      
+      const blob = new Blob([pdfBytes as BufferSource], { type: "application/pdf" });
+      console.log('[SPLIT-DOWNLOAD] Blob created');
         
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
