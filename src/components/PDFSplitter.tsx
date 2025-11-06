@@ -17,7 +17,7 @@ export const PDFSplitter = () => {
   const handleFileSelect = useCallback(async (file: File) => {
     setPdfFile(file);
     const arrayBuffer = await file.arrayBuffer();
-    setPdfArrayBuffer(arrayBuffer);
+    setPdfArrayBuffer(arrayBuffer.slice(0)); // Clone buffer to prevent detachment
     
     const pdfDoc = await PDFDocument.load(arrayBuffer);
     setPageCount(pdfDoc.getPageCount());
@@ -99,7 +99,44 @@ export const PDFSplitter = () => {
     return segments;
   }, [pageCount, splitPositions, deletedPages]);
 
-  const handleDownload = useCallback(async () => {
+  // Download einzelnes Segment
+  const downloadSegment = useCallback(async (segmentIndex: number) => {
+    if (!pdfArrayBuffer) return;
+
+    try {
+      const segments = getSegments();
+      const segment = segments[segmentIndex];
+      
+      if (!segment || segment.length === 0) {
+        toast.error("Ungültiges Segment");
+        return;
+      }
+
+      const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
+      const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+      
+      const newPdf = await PDFDocument.create();
+      const copiedPages = await newPdf.copyPages(pdfDoc, segment);
+      copiedPages.forEach((page) => newPdf.addPage(page));
+      const pdfBytes = await newPdf.save();
+      
+      const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${originalFileName}_teil-${segmentIndex + 1}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success(`PDF Teil ${segmentIndex + 1} heruntergeladen`);
+    } catch (error) {
+      console.error('[SEGMENT-DOWNLOAD ERROR]', error);
+      toast.error("Fehler beim Erstellen der PDF");
+    }
+  }, [pdfArrayBuffer, pdfFile, getSegments]);
+
+  // Download alle Segmente als ZIP
+  const downloadAllAsZip = useCallback(async () => {
     if (!pdfArrayBuffer) return;
 
     try {
@@ -111,33 +148,10 @@ export const PDFSplitter = () => {
       }
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
-
-      // PDF-Dokument einmal laden für alle Operationen
-      const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
-
-      // Für einzelne PDF: Direkter Download (kein ZIP)
-      if (segments.length === 1) {
-        const segment = segments[0];
-        const newPdf = await PDFDocument.create();
-        const copiedPages = await newPdf.copyPages(pdfDoc, segment);
-        copiedPages.forEach((page) => newPdf.addPage(page));
-        const pdfBytes = await newPdf.save();
-        
-        const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${originalFileName}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
-        
-        toast.success("PDF erfolgreich erstellt");
-        return;
-      }
-
-      // Für mehrere PDFs: ZIP-Archiv erstellen
+      
       toast.info(`ZIP-Archiv mit ${segments.length} PDFs wird erstellt...`);
       
+      const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
       const zip = new JSZip();
 
       for (let i = 0; i < segments.length; i++) {
@@ -160,8 +174,8 @@ export const PDFSplitter = () => {
 
       toast.success(`ZIP mit ${segments.length} PDFs erfolgreich heruntergeladen`);
     } catch (error) {
-      console.error('[SPLIT-DOWNLOAD ERROR]', error);
-      toast.error("Fehler beim Erstellen der PDFs");
+      console.error('[ZIP-DOWNLOAD ERROR]', error);
+      toast.error("Fehler beim Erstellen des ZIP-Archivs");
     }
   }, [pdfArrayBuffer, pdfFile, getSegments]);
 
@@ -222,20 +236,57 @@ export const PDFSplitter = () => {
           {/* Info & Download */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground bg-accent/50 p-3 rounded">
-              💡 Klicke zwischen Seiten, um Schnittlinien zu setzen. Jedes Segment wird als separate
-              PDF heruntergeladen.
+              💡 Klicke zwischen Seiten, um Schnittlinien zu setzen. Du kannst jedes Segment einzeln
+              oder alle zusammen als ZIP herunterladen.
             </div>
 
-            <Button
-              onClick={handleDownload}
-              disabled={activePages === 0}
-              className="w-full"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {segments.length > 1
-                ? `${segments.length} PDFs herunterladen`
-                : "PDF herunterladen"}
-            </Button>
+            {/* Segment-Liste mit individuellen Downloads */}
+            {segments.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Segmente ({segments.length})</h3>
+                <div className="space-y-2">
+                  {segments.map((segment, index) => {
+                    const firstPage = segment[0] + 1;
+                    const lastPage = segment[segment.length - 1] + 1;
+                    const pageRange = firstPage === lastPage 
+                      ? `Seite ${firstPage}` 
+                      : `Seiten ${firstPage}-${lastPage}`;
+                    
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">PDF Teil {index + 1}</div>
+                          <div className="text-xs text-muted-foreground">{pageRange}</div>
+                        </div>
+                        <Button
+                          onClick={() => downloadSegment(index)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <Download className="w-3 h-3 mr-1" />
+                          Download
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Alle als ZIP Button */}
+                {segments.length > 1 && (
+                  <Button
+                    onClick={downloadAllAsZip}
+                    className="w-full"
+                    variant="default"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Alle als ZIP herunterladen ({segments.length} PDFs)
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
