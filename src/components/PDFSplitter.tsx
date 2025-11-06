@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
+import JSZip from "jszip";
 import { PDFUpload } from "./PDFUpload";
 import { PDFSplitView } from "./PDFSplitView";
 import { Button } from "./ui/button";
@@ -102,10 +103,7 @@ export const PDFSplitter = () => {
     if (!pdfArrayBuffer) return;
 
     try {
-      console.log('[SPLIT-DOWNLOAD] Starting download process');
       const segments = getSegments();
-      console.log('[SPLIT-DOWNLOAD] Calculated segments:', segments);
-      console.log('[SPLIT-DOWNLOAD] Segments count:', segments.length);
 
       if (segments.length === 0) {
         toast.error("Keine Seiten zum Download vorhanden");
@@ -113,66 +111,58 @@ export const PDFSplitter = () => {
       }
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
-      console.log('[SPLIT-DOWNLOAD] Original filename:', originalFileName);
 
-      for (let i = 0; i < segments.length; i++) {
-        const segment = segments[i];
-        console.log(`[SPLIT-DOWNLOAD] Processing segment ${i + 1}:`, segment);
-        
-        console.log('[SPLIT-DOWNLOAD] Loading original PDF...');
+      // Für einzelne PDF: Direkter Download (kein ZIP)
+      if (segments.length === 1) {
+        const segment = segments[0];
         const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
-        console.log('[SPLIT-DOWNLOAD] PDF loaded, total pages:', pdfDoc.getPageCount());
-        
-        console.log('[SPLIT-DOWNLOAD] Creating new PDF...');
         const newPdf = await PDFDocument.create();
-        
-        console.log('[SPLIT-DOWNLOAD] Copying pages:', segment);
         const copiedPages = await newPdf.copyPages(pdfDoc, segment);
-        console.log('[SPLIT-DOWNLOAD] Pages copied:', copiedPages.length);
-        
         copiedPages.forEach((page) => newPdf.addPage(page));
-        console.log('[SPLIT-DOWNLOAD] Pages added to new PDF');
-
-        console.log('[SPLIT-DOWNLOAD] Saving PDF...');
         const pdfBytes = await newPdf.save();
-      console.log('[SPLIT-DOWNLOAD] PDF saved, size:', pdfBytes.length, 'bytes');
-      
-      const blob = new Blob([pdfBytes as BufferSource], { type: "application/pdf" });
-      console.log('[SPLIT-DOWNLOAD] Blob created');
         
+        const blob = new Blob([pdfBytes as BufferSource], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `${originalFileName}_teil-${i + 1}.pdf`;
+        link.download = `${originalFileName}.pdf`;
         link.click();
-        console.log(`[SPLIT-DOWNLOAD] Download triggered: ${link.download}`);
-
         URL.revokeObjectURL(url);
-
-        // Kurze Verzögerung zwischen Downloads für Browser-Kompatibilität
-        if (i < segments.length - 1) {
-          console.log('[SPLIT-DOWNLOAD] Waiting 300ms before next download...');
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
+        
+        toast.success("PDF erfolgreich erstellt");
+        return;
       }
 
-      console.log('[SPLIT-DOWNLOAD] All downloads complete');
-      toast.success(
-        `${segments.length} PDF${segments.length > 1 ? "s" : ""} erfolgreich erstellt`
-      );
+      // Für mehrere PDFs: ZIP-Archiv erstellen
+      toast.info(`ZIP-Archiv mit ${segments.length} PDFs wird erstellt...`);
+      
+      const zip = new JSZip();
+
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+        const newPdf = await PDFDocument.create();
+        const copiedPages = await newPdf.copyPages(pdfDoc, segment);
+        copiedPages.forEach((page) => newPdf.addPage(page));
+        const pdfBytes = await newPdf.save();
+        
+        zip.file(`${originalFileName}_teil-${i + 1}.pdf`, pdfBytes);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${originalFileName}_geteilt.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast.success(`ZIP mit ${segments.length} PDFs erfolgreich heruntergeladen`);
     } catch (error) {
       console.error('[SPLIT-DOWNLOAD ERROR]', error);
-      console.error('[SPLIT-DOWNLOAD ERROR DETAILS]', {
-        message: error instanceof Error ? error.message : 'Unknown',
-        stack: error instanceof Error ? error.stack : undefined,
-        segments: getSegments(),
-        pageCount,
-        deletedPages: Array.from(deletedPages),
-        splitPositions
-      });
       toast.error("Fehler beim Erstellen der PDFs");
     }
-  }, [pdfArrayBuffer, pdfFile, getSegments, pageCount, deletedPages, splitPositions]);
+  }, [pdfArrayBuffer, pdfFile, getSegments]);
 
   const segments = getSegments();
   const activePages = pageCount - deletedPages.size;
