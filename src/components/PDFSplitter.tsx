@@ -112,16 +112,18 @@ export const PDFSplitter = () => {
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
 
+      // PDF-Dokument einmal laden für alle Operationen
+      const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+
       // Für einzelne PDF: Direkter Download (kein ZIP)
       if (segments.length === 1) {
         const segment = segments[0];
-        const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
         const newPdf = await PDFDocument.create();
         const copiedPages = await newPdf.copyPages(pdfDoc, segment);
         copiedPages.forEach((page) => newPdf.addPage(page));
         const pdfBytes = await newPdf.save();
         
-        const blob = new Blob([pdfBytes as BufferSource], { type: "application/pdf" });
+        const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -140,7 +142,6 @@ export const PDFSplitter = () => {
 
       for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
-        const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
         const newPdf = await PDFDocument.create();
         const copiedPages = await newPdf.copyPages(pdfDoc, segment);
         copiedPages.forEach((page) => newPdf.addPage(page));
