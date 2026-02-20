@@ -1,45 +1,29 @@
 
 
-## Fix: "Buffer is already detached" -- Echte Ursache gefunden
+## Robuster Fix: File-Objekt statt gecachten Buffer fuer Downloads
 
-### Ursache
-`PDFSplitView` bekommt `pdfArrayBuffer` direkt und gibt ihn an `pdfjsLib.getDocument({ data: pdfArrayBuffer })` weiter. pdfjs-dist **transferiert** den ArrayBuffer intern an einen Web Worker, wodurch er im Hauptthread **detached** wird. Danach kann kein `copyArrayBuffer()` mehr darauf zugreifen.
+### Problem
+Auch mit `.slice()` in PDFSplitView kann der zugrunde liegende ArrayBuffer durch pdfjs-dist v5 detached werden. Die `Uint8Array` im State (`pdfData`) wird dann fuer pdf-lib unbrauchbar.
 
-### Loesung: Uint8Array statt ArrayBuffer verwenden
+### Loesung
+Statt den gecachten `pdfData`-Buffer fuer Downloads zu verwenden, wird bei jedem Download frisch aus dem `File`-Objekt gelesen -- genau wie der funktionierende PDFMerger es bereits macht. `file.arrayBuffer()` liefert jedes Mal einen neuen, unabhaengigen Buffer.
 
-`Uint8Array` wird von pdfjs-dist **kopiert** statt transferiert. Sowohl `pdf-lib` als auch `pdfjs-dist` akzeptieren `Uint8Array`.
+`pdfData` bleibt weiterhin im State fuer die Thumbnail-Generierung in PDFSplitView (dort wird `.slice()` verwendet).
 
 ### Aenderungen
 
-**1. `src/components/PDFSplitter.tsx`**
+**`src/components/PDFSplitter.tsx`**
 
-- State-Typ aendern: `pdfArrayBuffer` wird zu `pdfData` vom Typ `Uint8Array | null`
-- `handleFileSelect`: Statt `ArrayBuffer` eine `Uint8Array` speichern
-- `downloadSegment` und `downloadAllAsZip`: `PDFDocument.load()` direkt mit der `Uint8Array` aufrufen (pdf-lib kopiert intern, kein manuelles Klonen noetig)
-- `copyArrayBuffer` Hilfsfunktion entfernen (nicht mehr noetig)
-- Props an `PDFSplitView` anpassen: `pdfData` statt `pdfArrayBuffer` uebergeben
-
-**2. `src/components/PDFSplitView.tsx`**
-
-- Props-Interface aendern: `pdfArrayBuffer: ArrayBuffer` wird zu `pdfData: Uint8Array`
-- `pdfjsLib.getDocument({ data: pdfData })` -- pdfjs-dist kopiert Uint8Array automatisch, kein Transfer
+1. `downloadSegment` (Zeile 116): Statt `PDFDocument.load(pdfData)` wird `PDFDocument.load(await pdfFile.arrayBuffer())` verwendet
+2. `downloadAllAsZip` (Zeile 154): Gleiche Aenderung -- frischer Buffer aus dem File-Objekt
 
 ### Warum das funktioniert
 
-- `ArrayBuffer` kann von Web Workern **transferiert** werden (Ownership wechselt, Original wird unbrauchbar)
-- `Uint8Array` wird stattdessen **kopiert** -- das Original bleibt intakt
-- Beide Libraries (pdf-lib und pdfjs-dist) unterstuetzen `Uint8Array` als Input
-- Kein manuelles Klonen mehr noetig
+- `File.arrayBuffer()` erstellt bei jedem Aufruf einen komplett neuen, unabhaengigen ArrayBuffer
+- Kein Zusammenhang mit dem pdfjs-Worker-Transfer
+- Genau dieses Muster wird bereits erfolgreich im PDFMerger verwendet
+- Der `pdfData`-State wird nur noch fuer Thumbnails gebraucht (dort mit `.slice()` geschuetzt)
 
-### Technische Details
-
-```text
-Vorher:
-  File -> ArrayBuffer (State) -> pdfjsLib transferiert -> DETACHED!
-                               -> pdf-lib load -> FEHLER
-
-Nachher:
-  File -> Uint8Array (State) -> pdfjsLib kopiert -> OK, Original bleibt
-                              -> pdf-lib load -> OK
-```
-
+### Betroffene Zeilen
+- Zeile 116: `PDFDocument.load(pdfData)` wird zu `PDFDocument.load(await pdfFile!.arrayBuffer())`
+- Zeile 154: `PDFDocument.load(pdfData)` wird zu `PDFDocument.load(await pdfFile!.arrayBuffer())`
