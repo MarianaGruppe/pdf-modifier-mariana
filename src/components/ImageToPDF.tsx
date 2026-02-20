@@ -193,7 +193,7 @@ export const ImageToPDF = () => {
               <span className="text-sm text-muted-foreground">
                 {isDraggingOver
                   ? "Bilder hier ablegen"
-                  : "Bilder hierher ziehen, einfügen (Strg+V) oder klicken"}
+                  : "Bilder hierher ziehen, aus Zwischenablage einfügen oder vom Computer auswählen"}
               </span>
             </Button>
           </label>
