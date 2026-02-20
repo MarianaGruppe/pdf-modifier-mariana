@@ -1,29 +1,51 @@
 
 
-## Robuster Fix: File-Objekt statt gecachten Buffer fuer Downloads
+## Disclaimer-Footer und noindex-Absicherung
 
-### Problem
-Auch mit `.slice()` in PDFSplitView kann der zugrunde liegende ArrayBuffer durch pdfjs-dist v5 detached werden. Die `Uint8Array` im State (`pdfData`) wird dann fuer pdf-lib unbrauchbar.
+Da es sich um ein internes Tool handelt (kein oeffentliches Angebot, kein Verkauf, keine Nutzerregistrierung, keine Datenverarbeitung), braucht ihr kein vollstaendiges Impressum nach TMG/DDG und keine Datenschutzerklaerung nach DSGVO im klassischen Sinne. Trotzdem ist ein Minimum-Disclaimer sinnvoll fuer die rechtliche Absicherung.
 
-### Loesung
-Statt den gecachten `pdfData`-Buffer fuer Downloads zu verwenden, wird bei jedem Download frisch aus dem `File`-Objekt gelesen -- genau wie der funktionierende PDFMerger es bereits macht. `file.arrayBuffer()` liefert jedes Mal einen neuen, unabhaengigen Buffer.
+### Was geaendert wird
 
-`pdfData` bleibt weiterhin im State fuer die Thumbnail-Generierung in PDFSplitView (dort wird `.slice()` verwendet).
+**1. `index.html` -- noindex Meta-Tags und Aufraumen**
 
-### Aenderungen
+- `<meta name="robots" content="noindex, nofollow">` hinzufuegen -- verhindert Indexierung durch alle Suchmaschinen
+- `lang="en"` zu `lang="de"` aendern (deutsche Seite)
+- Open-Graph- und Twitter-Card-Tags entfernen (internes Tool, soll nicht geteilt/gepreviewt werden)
+- `<meta name="author">` auf den Verein aendern
 
-**`src/components/PDFSplitter.tsx`**
+**2. `public/robots.txt` -- Crawling komplett blockieren**
 
-1. `downloadSegment` (Zeile 116): Statt `PDFDocument.load(pdfData)` wird `PDFDocument.load(await pdfFile.arrayBuffer())` verwendet
-2. `downloadAllAsZip` (Zeile 154): Gleiche Aenderung -- frischer Buffer aus dem File-Objekt
+Aktuell steht dort `Allow: /` fuer alle Bots. Das wird ersetzt durch:
 
-### Warum das funktioniert
+```
+User-agent: *
+Disallow: /
+```
 
-- `File.arrayBuffer()` erstellt bei jedem Aufruf einen komplett neuen, unabhaengigen ArrayBuffer
-- Kein Zusammenhang mit dem pdfjs-Worker-Transfer
-- Genau dieses Muster wird bereits erfolgreich im PDFMerger verwendet
-- Der `pdfData`-State wird nur noch fuer Thumbnails gebraucht (dort mit `.slice()` geschuetzt)
+Zusammen mit dem noindex-Meta-Tag ist das doppelte Absicherung.
 
-### Betroffene Zeilen
-- Zeile 116: `PDFDocument.load(pdfData)` wird zu `PDFDocument.load(await pdfFile!.arrayBuffer())`
-- Zeile 154: `PDFDocument.load(pdfData)` wird zu `PDFDocument.load(await pdfFile!.arrayBuffer())`
+**3. `src/pages/Index.tsx` -- Disclaimer-Footer**
+
+Am Ende der Seite wird ein dezenter Footer-Bereich ergaenzt mit:
+
+- Hinweis: "Internes Tool -- Bestandteil des Gruppe M Oekosystems"
+- Keine Datenverarbeitung, keine Cookies, keine Indexierung
+- Impressum-Angaben (Vereinsname, Adresse, E-Mail)
+
+Der Footer wird visuell zurueckhaltend gestaltet (kleine Schrift, gedaempfte Farbe, Trennlinie), damit er nicht vom eigentlichen Tool ablenkt.
+
+### Was ihr NICHT braucht (und warum)
+
+- **Datenschutzerklaerung**: Keine personenbezogenen Daten werden verarbeitet. Alles laeuft lokal im Browser. Kein Tracking, keine Cookies, kein Server-Upload.
+- **Cookie-Banner**: Keine Cookies vorhanden.
+- **AGB**: Kein Verkauf, kein Angebot an Dritte.
+- **Vollstaendiges Impressum nach DDG**: Das DDG (frueher TMG) gilt fuer "geschaeftsmaessige Telemedien". Ein rein internes, nicht-oeffentliches Tool faellt nicht darunter. Trotzdem schadet eine Mindest-Angabe (Betreiber, Adresse, Kontakt) nicht.
+
+### Technische Details
+
+Aenderungen in 3 Dateien:
+
+- `index.html`: 4 Zeilen aendern/hinzufuegen (Meta-Tags)
+- `public/robots.txt`: Komplett ersetzen (2 Zeilen)
+- `src/pages/Index.tsx`: Footer-Abschnitt am Ende der Seite ergaenzen (ca. 20 Zeilen)
+
