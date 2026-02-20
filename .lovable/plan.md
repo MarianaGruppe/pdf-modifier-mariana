@@ -1,41 +1,51 @@
 
-## Bild zu PDF -- neue Funktion
 
-Bilder (JPG, PNG) koennen mit der bereits installierten `pdf-lib` Bibliothek komplett lokal im Browser in PDFs umgewandelt werden. Kein Server, kein Upload -- alles client-seitig.
+## Drag & Drop und Copy & Paste fuer Bilder
 
-### Funktionsumfang
+Die Upload-Box wird um zwei Eingabemethoden erweitert, damit Bilder nicht nur ueber den Datei-Dialog, sondern auch direkt per Drag & Drop aus dem Dateimanager und per Strg+V aus der Zwischenablage hinzugefuegt werden koennen.
 
-- Mehrere Bilder gleichzeitig hochladen (Drag & Drop oder Dateiauswahl)
-- Jedes Bild wird auf eine eigene PDF-Seite gesetzt
-- Seitengroesse passt sich automatisch an die Bildgroesse an (kein Zuschneiden, kein Verzerren)
-- Reihenfolge per Drag or einfacher Nummerierung anzeigen
-- Download als einzelne PDF-Datei
-- Unterstuetzte Formate: JPG/JPEG und PNG
+### Was sich aendert
 
-### Aenderungen
+**Datei: `src/components/ImageToPDF.tsx`**
 
-**1. Neue Komponente `src/components/ImageToPDF.tsx`**
+**1. Gemeinsame Hilfsfunktion `addFiles`**
 
-- Datei-Upload fuer mehrere Bilder (accept: image/jpeg, image/png)
-- Vorschau der hochgeladenen Bilder als Thumbnail-Grid
-- Bilder entfernen / Reihenfolge aendern
-- "PDF erstellen"-Button
-- Konvertierungslogik mit pdf-lib:
-  - `PDFDocument.create()`
-  - Fuer jedes Bild: `embedJpg()` oder `embedPng()` je nach Typ
-  - Seitengroesse = Bildgroesse (damit nichts verzerrt wird)
-  - `addPage([width, height])` und `drawImage()`
-  - `save()` und als Blob downloaden
+Eine zentrale Funktion, die aus einer `File[]`-Liste die gueltigen Bilder (JPG/PNG) filtert, Vorschau-URLs erzeugt und zum State hinzufuegt. Wird von allen drei Eingabewegen genutzt (Datei-Dialog, Drag & Drop, Paste).
 
-**2. `src/pages/Index.tsx` anpassen**
+**2. Drag & Drop aus dem Dateisystem**
 
-- Neuen Tab "Bild zu PDF" hinzufuegen (neben "Teilen" und "Zusammenfuegen")
-- Untertitel aktualisieren: "Dokumente teilen, zusammenfuegen und aus Bildern erstellen"
-- Import der neuen Komponente
+Die Upload-Box (der gestrichelte Button-Bereich) bekommt `onDragOver`, `onDragEnter`, `onDragLeave` und `onDrop` Event-Handler:
+
+- `onDragOver` / `onDragEnter`: `e.preventDefault()` und visueller Hinweis (z.B. Rahmenfarbe aendern, Text aendern zu "Bilder hier ablegen")
+- `onDragLeave`: Visuellen Hinweis zuruecksetzen
+- `onDrop`: Dateien aus `e.dataTransfer.files` lesen und ueber `addFiles` hinzufuegen
+
+Ein neuer State `isDraggingOver` steuert die visuelle Hervorhebung.
+
+**3. Einfuegen aus der Zwischenablage (Strg+V)**
+
+Ein `onPaste`-Event-Listener auf der gesamten Komponente (oder dem Upload-Bereich):
+
+- Liest `e.clipboardData.items` aus
+- Filtert nach `type.startsWith("image/")` (deckt Screenshots und kopierte Bilder ab)
+- Wandelt Items per `getAsFile()` in File-Objekte um
+- Fuegt sie ueber `addFiles` hinzu
+- Funktioniert automatisch mit Screenshots (Windows Snipping Tool, macOS Screenshot, etc.)
+
+Da die Zwischenablage keine Dateinamen hat, bekommen eingefuegte Bilder einen automatischen Namen wie "Eingefuegt-1.png".
+
+**4. Angepasster Upload-Text**
+
+Der Text in der Upload-Box wird erweitert zu:
+"Bilder hierher ziehen, einfuegen (Strg+V) oder klicken zum Auswaehlen"
+
+### Keine neuen Abhaengigkeiten
+
+Alles funktioniert mit nativen Browser-APIs (`DragEvent`, `ClipboardEvent`). Kein zusaetzliches Paket noetig.
 
 ### Technische Details
 
-- Keine neuen Abhaengigkeiten noetig -- `pdf-lib` kann JPG und PNG nativ einbetten
-- Bilder werden per `FileReader.readAsArrayBuffer()` gelesen
-- Vorschau ueber `URL.createObjectURL()`
-- Alles bleibt 100% client-seitig (konsistent mit dem bestehenden Datenschutz-Konzept)
+- `onDrop` verwendet `e.dataTransfer.files` -- funktioniert mit Dateien aus dem Explorer/Finder
+- `onPaste` verwendet `e.clipboardData.items` mit `getAsFile()` -- funktioniert mit Screenshots und kopierten Bildern
+- Die Komponente bekommt `tabIndex={0}` damit sie fokussierbar ist und Paste-Events empfangen kann
+- `useEffect` mit globalem `paste`-Listener auf `document`, damit Strg+V auch ohne expliziten Fokus auf der Box funktioniert (wird beim Tab-Wechsel weg von "Bild zu PDF" aufgeraeumt)
