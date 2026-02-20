@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { PDFDocument } from "pdf-lib";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
@@ -9,28 +9,83 @@ interface ImageData {
   previewUrl: string;
 }
 
+let pasteCounter = 0;
+
 export const ImageToPDF = () => {
   const [images, setImages] = useState<ImageData[]>([]);
   const [isConverting, setIsConverting] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const addFiles = useCallback((files: File[]) => {
+    const imageFiles = files.filter(
+      (f) => f.type === "image/jpeg" || f.type === "image/png"
+    );
+    if (imageFiles.length === 0) return;
+    const newImages: ImageData[] = imageFiles.map((file) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setImages((prev) => [...prev, ...newImages]);
+  }, []);
 
   const handleFileSelect = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files || []);
-      const imageFiles = files.filter(
-        (f) => f.type === "image/jpeg" || f.type === "image/png"
-      );
-      const newImages: ImageData[] = imageFiles.map((file) => ({
-        id: `${Date.now()}-${Math.random()}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-      setImages((prev) => [...prev, ...newImages]);
-      // Reset input so same file can be added again
+      addFiles(files);
       event.target.value = "";
     },
-    []
+    [addFiles]
   );
+
+  // Global paste listener
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            pasteCounter++;
+            const ext = file.type === "image/png" ? "png" : "jpg";
+            const named = new File([file], `Eingefuegt-${pasteCounter}.${ext}`, { type: file.type });
+            files.push(named);
+          }
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        addFiles(files);
+        toast.success(`${files.length} ${files.length === 1 ? "Bild" : "Bilder"} eingefügt`);
+      }
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [addFiles]);
+
+  const handleDropZoneDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDraggingOver(false);
+      const files = Array.from(e.dataTransfer.files);
+      addFiles(files);
+    },
+    [addFiles]
+  );
+
+  const handleDropZoneDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  }, []);
+
+  const handleDropZoneDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  }, []);
 
   const removeImage = useCallback((index: number) => {
     setImages((prev) => {
@@ -109,7 +164,13 @@ export const ImageToPDF = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-medium mb-3">Bilder zu PDF</h2>
-        <div className="relative">
+        <div
+          className="relative"
+          onDrop={handleDropZoneDrop}
+          onDragOver={handleDropZoneDragOver}
+          onDragEnter={handleDropZoneDragOver}
+          onDragLeave={handleDropZoneDragLeave}
+        >
           <input
             type="file"
             accept="image/jpeg,image/png"
@@ -122,11 +183,17 @@ export const ImageToPDF = () => {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-auto py-8 border-dashed hover:bg-accent/50 transition-colors cursor-pointer"
+              className={`w-full h-auto py-8 border-dashed transition-colors cursor-pointer ${
+                isDraggingOver
+                  ? "border-primary bg-accent"
+                  : "hover:bg-accent/50"
+              }`}
               asChild
             >
               <span className="text-sm text-muted-foreground">
-                Bilder auswählen (JPG, PNG – mehrere möglich)
+                {isDraggingOver
+                  ? "Bilder hier ablegen"
+                  : "Bilder hierher ziehen, einfügen (Strg+V) oder klicken"}
               </span>
             </Button>
           </label>
