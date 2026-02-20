@@ -1,74 +1,45 @@
 
-## Plan zur Behebung des "Buffer is already detached" Fehlers
 
-### Problem-Analyse
-1. **Zeile 20**: `arrayBuffer.slice(0)` erstellt nur eine flache Kopie
-2. **Zeile 22**: Das **ursprüngliche** `arrayBuffer` wird für das erste `PDFDocument.load()` verwendet, nicht das geklonte
-3. Wenn `PDFDocument.load()` das ursprüngliche Buffer verwendet, wird es "transferred" und unbrauchbar
-4. Das geklonte Buffer ist möglicherweise auch betroffen, da `.slice(0)` keine echte tiefe Kopie erstellt
+## Fix: "Buffer is already detached" -- Echte Ursache gefunden
 
-### Lösung (Best Practice aus react-pdf GitHub)
+### Ursache
+`PDFSplitView` bekommt `pdfArrayBuffer` direkt und gibt ihn an `pdfjsLib.getDocument({ data: pdfArrayBuffer })` weiter. pdfjs-dist **transferiert** den ArrayBuffer intern an einen Web Worker, wodurch er im Hauptthread **detached** wird. Danach kann kein `copyArrayBuffer()` mehr darauf zugreifen.
 
-**Schritt 1: Echte ArrayBuffer-Klon-Funktion erstellen**
-```typescript
-const copyArrayBuffer = (arrayBuffer: ArrayBuffer): ArrayBuffer => {
-  const copiedArrayBuffer = new ArrayBuffer(arrayBuffer.byteLength);
-  new Uint8Array(copiedArrayBuffer).set(new Uint8Array(arrayBuffer));
-  return copiedArrayBuffer;
-};
-```
-Diese Funktion erstellt eine **echte tiefe Kopie** des ArrayBuffers.
+### Loesung: Uint8Array statt ArrayBuffer verwenden
 
-**Schritt 2: handleFileSelect umschreiben**
-```typescript
-const handleFileSelect = useCallback(async (file: File) => {
-  setPdfFile(file);
-  const arrayBuffer = await file.arrayBuffer();
-  
-  // Erstelle eine tiefe Kopie für die State-Verwaltung
-  const clonedBuffer = copyArrayBuffer(arrayBuffer);
-  setPdfArrayBuffer(clonedBuffer);
-  
-  // Verwende das ORIGINAL nur für das initiale Laden
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
-  setPageCount(pdfDoc.getPageCount());
-  setSplitPositions([]);
-  setDeletedPages(new Set());
-}, []);
-```
+`Uint8Array` wird von pdfjs-dist **kopiert** statt transferiert. Sowohl `pdf-lib` als auch `pdfjs-dist` akzeptieren `Uint8Array`.
 
-**Schritt 3: Alternative Lösung - Doppeltes Klonen**
-Falls die obige Lösung nicht funktioniert:
-```typescript
-const handleFileSelect = useCallback(async (file: File) => {
-  setPdfFile(file);
-  const arrayBuffer = await file.arrayBuffer();
-  
-  // Erstelle ZWEI unabhängige Kopien
-  const clonedBufferForState = copyArrayBuffer(arrayBuffer);
-  const clonedBufferForLoading = copyArrayBuffer(arrayBuffer);
-  
-  setPdfArrayBuffer(clonedBufferForState);
-  
-  const pdfDoc = await PDFDocument.load(clonedBufferForLoading);
-  setPageCount(pdfDoc.getPageCount());
-  setSplitPositions([]);
-  setDeletedPages(new Set());
-}, []);
-```
+### Aenderungen
+
+**1. `src/components/PDFSplitter.tsx`**
+
+- State-Typ aendern: `pdfArrayBuffer` wird zu `pdfData` vom Typ `Uint8Array | null`
+- `handleFileSelect`: Statt `ArrayBuffer` eine `Uint8Array` speichern
+- `downloadSegment` und `downloadAllAsZip`: `PDFDocument.load()` direkt mit der `Uint8Array` aufrufen (pdf-lib kopiert intern, kein manuelles Klonen noetig)
+- `copyArrayBuffer` Hilfsfunktion entfernen (nicht mehr noetig)
+- Props an `PDFSplitView` anpassen: `pdfData` statt `pdfArrayBuffer` uebergeben
+
+**2. `src/components/PDFSplitView.tsx`**
+
+- Props-Interface aendern: `pdfArrayBuffer: ArrayBuffer` wird zu `pdfData: Uint8Array`
+- `pdfjsLib.getDocument({ data: pdfData })` -- pdfjs-dist kopiert Uint8Array automatisch, kein Transfer
 
 ### Warum das funktioniert
-- **Echte tiefe Kopie**: `new Uint8Array(copiedArrayBuffer).set(new Uint8Array(arrayBuffer))` kopiert Byte für Byte
-- **Unabhängige Buffer**: Die Kopien sind komplett unabhängig vom Original
-- **Keine Detachment-Probleme**: Wenn ein Buffer transferred wird, bleiben die anderen intakt
-- **Best Practice**: Diese Methode wird von großen Libraries wie react-pdf verwendet
 
-### Erwartetes Ergebnis
-✅ Einzelne Segment-Downloads funktionieren  
-✅ ZIP-Download für mehrere Segmente funktioniert  
-✅ Keine "Buffer is already detached" Fehler mehr  
-✅ Wiederholte Downloads ohne Neuladen der Datei möglich
+- `ArrayBuffer` kann von Web Workern **transferiert** werden (Ownership wechselt, Original wird unbrauchbar)
+- `Uint8Array` wird stattdessen **kopiert** -- das Original bleibt intakt
+- Beide Libraries (pdf-lib und pdfjs-dist) unterstuetzen `Uint8Array` als Input
+- Kein manuelles Klonen mehr noetig
 
-### Änderungen in src/components/PDFSplitter.tsx
-1. Zeile 10-16: Füge die `copyArrayBuffer` Funktion hinzu (nach Imports, vor der Komponente)
-2. Zeile 17-26: Ersetze die `handleFileSelect` Funktion mit der neuen Implementierung
+### Technische Details
+
+```text
+Vorher:
+  File -> ArrayBuffer (State) -> pdfjsLib transferiert -> DETACHED!
+                               -> pdf-lib load -> FEHLER
+
+Nachher:
+  File -> Uint8Array (State) -> pdfjsLib kopiert -> OK, Original bleibt
+                              -> pdf-lib load -> OK
+```
+
