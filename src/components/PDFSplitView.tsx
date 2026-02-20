@@ -29,7 +29,7 @@ export const PDFSplitView = ({
 
   useEffect(() => {
     const generateThumbnails = async () => {
-      const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: pdfData.slice() }).promise;
       const thumbs: string[] = [];
 
       for (let i = 1; i <= pageCount; i++) {
