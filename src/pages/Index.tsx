@@ -1,6 +1,7 @@
 import { PDFSplitter } from "@/components/PDFSplitter";
 import { PDFMerger } from "@/components/PDFMerger";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 
 const Index = () => {
   return (
@@ -37,6 +38,27 @@ const Index = () => {
             <PDFMerger />
           </TabsContent>
         </Tabs>
+
+        <footer className="mt-16 pt-6">
+          <Separator className="mb-6" />
+          <div className="text-xs text-muted-foreground space-y-3">
+            <p>
+              Internes Tool – Bestandteil des Gruppe M Ökosystems. Diese Seite ist nicht öffentlich indexiert.
+              Es findet keine serverseitige Datenverarbeitung statt. Es werden keine Cookies verwendet.
+              Alle Vorgänge laufen ausschließlich lokal im Browser ab.
+            </p>
+            <div>
+              <p className="font-medium mb-1">Impressum</p>
+              <p>Mariana Cannabis Social Clubs Deutschland e.V.</p>
+              <p>Kurze Straße 7, 37073 Göttingen</p>
+              <p>
+                <a href="mailto:kontakt@cscsdeutschland.de" className="underline hover:text-foreground transition-colors">
+                  kontakt@cscsdeutschland.de
+                </a>
+              </p>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
