@@ -1,5 +1,6 @@
 import { PDFSplitter } from "@/components/PDFSplitter";
 import { PDFMerger } from "@/components/PDFMerger";
+import { ImageToPDF } from "@/components/ImageToPDF";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
@@ -10,7 +11,7 @@ const Index = () => {
         <header className="mb-8">
           <h1 className="text-xl font-medium mb-1">PDF Editor</h1>
           <p className="text-sm text-muted-foreground">
-            Dokumente teilen und zusammenfügen
+            Dokumente teilen, zusammenfügen und aus Bildern erstellen
           </p>
         </header>
 
@@ -28,6 +29,12 @@ const Index = () => {
             >
               Zusammenfügen
             </TabsTrigger>
+            <TabsTrigger
+              value="image-to-pdf"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-2 shadow-none"
+            >
+              Bild zu PDF
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="split" className="mt-0">
@@ -36,6 +43,10 @@ const Index = () => {
 
           <TabsContent value="merge" className="mt-0">
             <PDFMerger />
+          </TabsContent>
+
+          <TabsContent value="image-to-pdf" className="mt-0">
+            <ImageToPDF />
           </TabsContent>
         </Tabs>
 
