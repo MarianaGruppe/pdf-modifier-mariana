@@ -7,29 +7,19 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Download, RotateCcw } from "lucide-react";
 
-const copyArrayBuffer = (arrayBuffer: ArrayBuffer): ArrayBuffer => {
-  const copied = new ArrayBuffer(arrayBuffer.byteLength);
-  new Uint8Array(copied).set(new Uint8Array(arrayBuffer));
-  return copied;
-};
-
 export const PDFSplitter = () => {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
-  const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
+  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
   const [splitPositions, setSplitPositions] = useState<number[]>([]);
   const [deletedPages, setDeletedPages] = useState<Set<number>>(new Set());
 
   const handleFileSelect = useCallback(async (file: File) => {
     setPdfFile(file);
-    const arrayBuffer = await file.arrayBuffer();
+    const data = new Uint8Array(await file.arrayBuffer());
+    setPdfData(data);
     
-    const clonedBufferForState = copyArrayBuffer(arrayBuffer);
-    const clonedBufferForLoading = copyArrayBuffer(arrayBuffer);
-    
-    setPdfArrayBuffer(clonedBufferForState);
-    
-    const pdfDoc = await PDFDocument.load(clonedBufferForLoading);
+    const pdfDoc = await PDFDocument.load(data);
     setPageCount(pdfDoc.getPageCount());
     setSplitPositions([]);
     setDeletedPages(new Set());
@@ -111,7 +101,7 @@ export const PDFSplitter = () => {
 
   // Download einzelnes Segment
   const downloadSegment = useCallback(async (segmentIndex: number) => {
-    if (!pdfArrayBuffer) return;
+    if (!pdfData) return;
 
     try {
       const segments = getSegments();
@@ -123,8 +113,7 @@ export const PDFSplitter = () => {
       }
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
-      const bufferCopy = copyArrayBuffer(pdfArrayBuffer);
-      const pdfDoc = await PDFDocument.load(bufferCopy);
+      const pdfDoc = await PDFDocument.load(pdfData);
       
       const newPdf = await PDFDocument.create();
       const copiedPages = await newPdf.copyPages(pdfDoc, segment);
@@ -144,11 +133,11 @@ export const PDFSplitter = () => {
       console.error('[SEGMENT-DOWNLOAD ERROR]', error);
       toast.error("Fehler beim Erstellen der PDF");
     }
-  }, [pdfArrayBuffer, pdfFile, getSegments]);
+  }, [pdfData, pdfFile, getSegments]);
 
   // Download alle Segmente als ZIP
   const downloadAllAsZip = useCallback(async () => {
-    if (!pdfArrayBuffer) return;
+    if (!pdfData) return;
 
     try {
       const segments = getSegments();
@@ -162,8 +151,7 @@ export const PDFSplitter = () => {
       
       toast.info(`ZIP-Archiv mit ${segments.length} PDFs wird erstellt...`);
       
-      const bufferCopy = copyArrayBuffer(pdfArrayBuffer);
-      const pdfDoc = await PDFDocument.load(bufferCopy);
+      const pdfDoc = await PDFDocument.load(pdfData);
       const zip = new JSZip();
 
       for (let i = 0; i < segments.length; i++) {
@@ -189,7 +177,7 @@ export const PDFSplitter = () => {
       console.error('[ZIP-DOWNLOAD ERROR]', error);
       toast.error("Fehler beim Erstellen des ZIP-Archivs");
     }
-  }, [pdfArrayBuffer, pdfFile, getSegments]);
+  }, [pdfData, pdfFile, getSegments]);
 
   const segments = getSegments();
   const activePages = pageCount - deletedPages.size;
@@ -201,7 +189,7 @@ export const PDFSplitter = () => {
         <PDFUpload onFileSelect={handleFileSelect} label="Quelldokument" />
       </div>
 
-      {pdfFile && pdfArrayBuffer && (
+      {pdfFile && pdfData && (
         <>
           {/* Statistiken */}
           <div className="flex items-center gap-4 text-sm flex-wrap">
@@ -235,7 +223,7 @@ export const PDFSplitter = () => {
 
           {/* PDF Split View */}
           <PDFSplitView
-            pdfArrayBuffer={pdfArrayBuffer}
+            pdfData={pdfData}
             pageCount={pageCount}
             splitPositions={splitPositions}
             deletedPages={deletedPages}

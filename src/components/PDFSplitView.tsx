@@ -5,7 +5,7 @@ import { X, Scissors, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PDFSplitViewProps {
-  pdfArrayBuffer: ArrayBuffer;
+  pdfData: Uint8Array;
   pageCount: number;
   splitPositions: number[];
   deletedPages: Set<number>;
@@ -16,7 +16,7 @@ interface PDFSplitViewProps {
 }
 
 export const PDFSplitView = ({
-  pdfArrayBuffer,
+  pdfData,
   pageCount,
   splitPositions,
   deletedPages,
@@ -29,7 +29,7 @@ export const PDFSplitView = ({
 
   useEffect(() => {
     const generateThumbnails = async () => {
-      const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
       const thumbs: string[] = [];
 
       for (let i = 1; i <= pageCount; i++) {
@@ -54,7 +54,7 @@ export const PDFSplitView = ({
     };
 
     generateThumbnails();
-  }, [pdfArrayBuffer, pageCount]);
+  }, [pdfData, pageCount]);
 
   // Berechne Segment-Nummern für Split-Marker
   const getSegmentNumber = (afterPageIndex: number): number => {
