@@ -7,6 +7,12 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { Download, RotateCcw } from "lucide-react";
 
+const copyArrayBuffer = (arrayBuffer: ArrayBuffer): ArrayBuffer => {
+  const copied = new ArrayBuffer(arrayBuffer.byteLength);
+  new Uint8Array(copied).set(new Uint8Array(arrayBuffer));
+  return copied;
+};
+
 export const PDFSplitter = () => {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -17,9 +23,13 @@ export const PDFSplitter = () => {
   const handleFileSelect = useCallback(async (file: File) => {
     setPdfFile(file);
     const arrayBuffer = await file.arrayBuffer();
-    setPdfArrayBuffer(arrayBuffer.slice(0)); // Clone buffer to prevent detachment
     
-    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const clonedBufferForState = copyArrayBuffer(arrayBuffer);
+    const clonedBufferForLoading = copyArrayBuffer(arrayBuffer);
+    
+    setPdfArrayBuffer(clonedBufferForState);
+    
+    const pdfDoc = await PDFDocument.load(clonedBufferForLoading);
     setPageCount(pdfDoc.getPageCount());
     setSplitPositions([]);
     setDeletedPages(new Set());
@@ -113,7 +123,8 @@ export const PDFSplitter = () => {
       }
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
-      const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+      const bufferCopy = copyArrayBuffer(pdfArrayBuffer);
+      const pdfDoc = await PDFDocument.load(bufferCopy);
       
       const newPdf = await PDFDocument.create();
       const copiedPages = await newPdf.copyPages(pdfDoc, segment);
@@ -151,7 +162,8 @@ export const PDFSplitter = () => {
       
       toast.info(`ZIP-Archiv mit ${segments.length} PDFs wird erstellt...`);
       
-      const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+      const bufferCopy = copyArrayBuffer(pdfArrayBuffer);
+      const pdfDoc = await PDFDocument.load(bufferCopy);
       const zip = new JSZip();
 
       for (let i = 0; i < segments.length; i++) {
