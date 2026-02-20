@@ -113,7 +113,7 @@ export const PDFSplitter = () => {
       }
 
       const originalFileName = pdfFile?.name.replace(".pdf", "") || "dokument";
-      const pdfDoc = await PDFDocument.load(pdfData);
+      const pdfDoc = await PDFDocument.load(await pdfFile!.arrayBuffer());
       
       const newPdf = await PDFDocument.create();
       const copiedPages = await newPdf.copyPages(pdfDoc, segment);
@@ -151,7 +151,7 @@ export const PDFSplitter = () => {
       
       toast.info(`ZIP-Archiv mit ${segments.length} PDFs wird erstellt...`);
       
-      const pdfDoc = await PDFDocument.load(pdfData);
+      const pdfDoc = await PDFDocument.load(await pdfFile!.arrayBuffer());
       const zip = new JSZip();
 
       for (let i = 0; i < segments.length; i++) {
