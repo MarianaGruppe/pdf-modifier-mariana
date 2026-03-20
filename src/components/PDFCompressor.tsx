@@ -263,7 +263,7 @@ export const PDFCompressor = () => {
 
   const handleDownload = useCallback(() => {
     if (!result || !file) return;
-    const blob = new Blob([result.compressedBytes], { type: "application/pdf" });
+    const blob = new Blob([result.compressedBytes.buffer as ArrayBuffer], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
