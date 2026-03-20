@@ -39,7 +39,7 @@ async function decodeImageToCanvas(
         // For FlateDecode, we need to draw raw pixels
         // Try raw pixel approach below
       } else {
-        const blob = new Blob([imageBytes], { type: mimeType });
+        const blob = new Blob([imageBytes.buffer as ArrayBuffer], { type: mimeType });
         const url = URL.createObjectURL(blob);
         try {
           const img = await loadImage(url);
