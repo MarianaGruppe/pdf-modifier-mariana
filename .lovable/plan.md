@@ -1,51 +1,58 @@
 
 
-## Drag & Drop und Copy & Paste fuer Bilder
+## PDF Komprimierung -- Dateigröße verringern
 
-Die Upload-Box wird um zwei Eingabemethoden erweitert, damit Bilder nicht nur ueber den Datei-Dialog, sondern auch direkt per Drag & Drop aus dem Dateimanager und per Strg+V aus der Zwischenablage hinzugefuegt werden koennen.
+### Machbarkeit
 
-### Was sich aendert
+Ja, das ist machbar -- komplett client-seitig im Browser. Der Hauptgrund für große PDFs sind eingebettete Bilder (Scans). Die Strategie: Bilder im PDF finden, per Canvas API verkleinern/komprimieren, und zurückschreiben. Das ist ein bewährter Ansatz mit `pdf-lib`.
 
-**Datei: `src/components/ImageToPDF.tsx`**
+### Funktionsumfang
 
-**1. Gemeinsame Hilfsfunktion `addFiles`**
+- Neuer Tab "Größe verringern" in der Navigation
+- PDF hochladen, Originalgröße anzeigen
+- Qualitätsstufe wählbar (z.B. Slider oder drei Stufen: Hoch / Mittel / Niedrig)
+- Komprimierung starten, Fortschrittsanzeige
+- Ergebnisgröße anzeigen (vorher → nachher) mit prozentualem Unterschied
+- Komprimierte PDF herunterladen
 
-Eine zentrale Funktion, die aus einer `File[]`-Liste die gueltigen Bilder (JPG/PNG) filtert, Vorschau-URLs erzeugt und zum State hinzufuegt. Wird von allen drei Eingabewegen genutzt (Datei-Dialog, Drag & Drop, Paste).
+### Technischer Ansatz
 
-**2. Drag & Drop aus dem Dateisystem**
+Die Komprimierung funktioniert so:
 
-Die Upload-Box (der gestrichelte Button-Bereich) bekommt `onDragOver`, `onDragEnter`, `onDragLeave` und `onDrop` Event-Handler:
+1. PDF mit `pdf-lib` laden (`PDFDocument.load`)
+2. Alle eingebetteten Bilder finden via `pdfDoc.context.enumerateIndirectObjects()` -- Objekte vom Subtype `Image` identifizieren
+3. Für jedes Bild:
+   - Raw-Bytes extrahieren
+   - In ein `HTMLCanvasElement` rendern
+   - Canvas auf gewünschte Größe skalieren (z.B. max 1500px Breite bei "Mittel")
+   - Als JPEG mit reduzierter Qualität exportieren (`canvas.toBlob` / `toDataURL` mit quality-Parameter)
+   - Komprimiertes Bild zurück in den PDF-Stream schreiben (Bytes + Dictionary-Einträge für Width/Height/Filter aktualisieren)
+4. PDF speichern und Download anbieten
 
-- `onDragOver` / `onDragEnter`: `e.preventDefault()` und visueller Hinweis (z.B. Rahmenfarbe aendern, Text aendern zu "Bilder hier ablegen")
-- `onDragLeave`: Visuellen Hinweis zuruecksetzen
-- `onDrop`: Dateien aus `e.dataTransfer.files` lesen und ueber `addFiles` hinzufuegen
+### Aenderungen
 
-Ein neuer State `isDraggingOver` steuert die visuelle Hervorhebung.
+**1. Neue Komponente `src/components/PDFCompressor.tsx`**
 
-**3. Einfuegen aus der Zwischenablage (Strg+V)**
+- Upload-Bereich (gleicher Stil wie andere Tabs)
+- Qualitäts-Slider (nutzt vorhandene Slider-Komponente)
+- Komprimierungslogik mit pdf-lib + Canvas API
+- Fortschrittsanzeige (vorhandene Progress-Komponente)
+- Ergebnis-Anzeige: Originalgröße, neue Größe, Einsparung in Prozent
+- Download-Button
 
-Ein `onPaste`-Event-Listener auf der gesamten Komponente (oder dem Upload-Bereich):
+**2. `src/pages/Index.tsx` anpassen**
 
-- Liest `e.clipboardData.items` aus
-- Filtert nach `type.startsWith("image/")` (deckt Screenshots und kopierte Bilder ab)
-- Wandelt Items per `getAsFile()` in File-Objekte um
-- Fuegt sie ueber `addFiles` hinzu
-- Funktioniert automatisch mit Screenshots (Windows Snipping Tool, macOS Screenshot, etc.)
+- Neuen Tab "Größe verringern" hinzufügen
+- Import der neuen Komponente
+- Untertitel erweitern
 
-Da die Zwischenablage keine Dateinamen hat, bekommen eingefuegte Bilder einen automatischen Namen wie "Eingefuegt-1.png".
+### Einschränkungen
 
-**4. Angepasster Upload-Text**
+- Funktioniert am besten bei bildlastigen PDFs (Scans) -- bei reinen Text-PDFs ist die Einsparung minimal
+- Sehr große PDFs (100+ MB) können den Browser-Speicher belasten
+- Die Bildqualität wird reduziert -- daher der Qualitäts-Slider zur Kontrolle
 
-Der Text in der Upload-Box wird erweitert zu:
-"Bilder hierher ziehen, einfuegen (Strg+V) oder klicken zum Auswaehlen"
+### Keine neuen Abhängigkeiten
 
-### Keine neuen Abhaengigkeiten
+Alles mit vorhandenen Tools: `pdf-lib` (PDF-Struktur), Canvas API (Bildkomprimierung), vorhandene UI-Komponenten (Slider, Progress).
 
-Alles funktioniert mit nativen Browser-APIs (`DragEvent`, `ClipboardEvent`). Kein zusaetzliches Paket noetig.
-
-### Technische Details
-
-- `onDrop` verwendet `e.dataTransfer.files` -- funktioniert mit Dateien aus dem Explorer/Finder
-- `onPaste` verwendet `e.clipboardData.items` mit `getAsFile()` -- funktioniert mit Screenshots und kopierten Bildern
-- Die Komponente bekommt `tabIndex={0}` damit sie fokussierbar ist und Paste-Events empfangen kann
-- `useEffect` mit globalem `paste`-Listener auf `document`, damit Strg+V auch ohne expliziten Fokus auf der Box funktioniert (wird beim Tab-Wechsel weg von "Bild zu PDF" aufgeraeumt)
