@@ -12,7 +12,7 @@ const Index = () => {
         <header className="mb-8">
           <h1 className="text-xl font-medium mb-1">PDF Editor</h1>
           <p className="text-sm text-muted-foreground">
-            Dokumente teilen, zusammenfügen und aus Bildern erstellen
+            Dokumente teilen, zusammenfügen, komprimieren und aus Bildern erstellen
           </p>
         </header>
 
