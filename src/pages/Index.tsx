@@ -36,6 +36,12 @@ const Index = () => {
             >
               Bild zu PDF
             </TabsTrigger>
+            <TabsTrigger
+              value="compress"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-2 shadow-none"
+            >
+              Größe verringern
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="split" className="mt-0">
@@ -48,6 +54,10 @@ const Index = () => {
 
           <TabsContent value="image-to-pdf" className="mt-0">
             <ImageToPDF />
+          </TabsContent>
+
+          <TabsContent value="compress" className="mt-0">
+            <PDFCompressor />
           </TabsContent>
         </Tabs>
 
